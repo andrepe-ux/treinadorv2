@@ -145,17 +145,28 @@
                     </div>
                 
 
-                <!-- Biblioteca Pública -->
-                <div class="p-4 bg-gray-100 rounded-xl shadow-inner border border-gray-200">
-                    <h2 class="text-xl font-semibold mb-3 border-b border-gray-300 pb-2 text-blue-600">📚 Biblioteca Pública</h2>
-                    <input id="librarySearch" type="text" placeholder="Pesquisar jogadas..."
-                        class="w-full p-2 mb-3 bg-white border border-gray-300 rounded-lg text-sm">
-                    <div id="publicLibraryList" class="space-y-2 max-h-60 overflow-y-auto pr-1">
-                        <p class="text-gray-500 text-sm">A carregar biblioteca...</p>
-                    </div>
-                </div>
+          
+               <!-- Biblioteca Pública -->
+<div class="p-4 bg-gray-100 rounded-xl shadow-inner border border-gray-200">
+    <h2 class="text-xl font-semibold mb-3 border-b border-gray-300 pb-2 text-blue-600">
+        📚 Biblioteca Pública
+    </h2>
+
+    <input
+        id="librarySearch"
+        type="text"
+        placeholder="Pesquisar jogadas..."
+        class="w-full p-2 mb-3 bg-white border border-gray-300 rounded-lg text-sm">
+
+    <div id="publicLibraryList"
+         class="space-y-2 max-h-60 overflow-y-auto pr-1">
+
+        <p class="text-gray-500 text-sm">
+            A carregar biblioteca...
+        </p>
+
+    </div>
 </div>
-            </div>
 
             <!-- Campo de Futsal (Canvas) - CENTRO (100% por defeito, dinâmico) -->
             <div id="canvasWrapper" class="w-full canvas-container bg-gray-200 rounded-xl p-4 shadow-inner order-2 lg:order-2 flex-grow">
@@ -1350,7 +1361,110 @@
             const data=await r.json();
             loadPlay(data);
         }
+async function loadPublicLibrary() {
 
+    try {
+
+        const response =
+            await fetch('./jogadas/index.json');
+
+        const data =
+            await response.json();
+
+        state.publicLibrary =
+            data.plays || [];
+
+        renderPublicLibrary(
+            state.publicLibrary
+        );
+
+    } catch(error) {
+
+        console.error(
+            'Erro ao carregar biblioteca:',
+            error
+        );
+
+        const list =
+            document.getElementById(
+                'publicLibraryList'
+            );
+
+        if(list){
+            list.innerHTML =
+                '<p class="text-red-500 text-sm">Erro ao carregar biblioteca.</p>';
+        }
+    }
+}
+
+function renderPublicLibrary(items) {
+
+    const list =
+        document.getElementById(
+            'publicLibraryList'
+        );
+
+    if(!list) return;
+
+    list.innerHTML = '';
+
+    if(items.length === 0){
+
+        list.innerHTML =
+            '<p class="text-gray-500 text-sm">Sem jogadas públicas.</p>';
+
+        return;
+    }
+
+    items.forEach(play => {
+
+        const row =
+            document.createElement('div');
+
+        row.className =
+            'flex justify-between items-center p-2 bg-white rounded border';
+
+        row.innerHTML = `
+            <span class="text-sm">
+                ${play.name || play.nome}
+            </span>
+
+            <button
+                class="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs">
+                Abrir
+            </button>
+        `;
+
+        row.querySelector('button')
+            .onclick =
+            () => loadPublicPlay(play);
+
+        list.appendChild(row);
+    });
+}
+
+async function loadPublicPlay(play) {
+
+    try {
+
+        const response =
+            await fetch(play.ficheiro);
+
+        const playData =
+            await response.json();
+
+        loadPlay(playData);
+
+    } catch(error) {
+
+        console.error(error);
+
+        setStatus(
+            'Erro ao abrir jogada pública.',
+            true
+        );
+    }
+}
 
         // --- Inicialização e Listeners ---
         function init() {
