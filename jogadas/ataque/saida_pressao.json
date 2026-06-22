@@ -1,6 +1,22 @@
 {
   "id": "ataque_001",
   "name": "Saída Pressão 4x3",
-  "labels": {},
-  "recording": []
+  "labels": {
+    "1": "GR",
+    "2": "Fixo",
+    "3": "Ala D",
+    "4": "Ala E",
+    "5": "Pivô"
+  },
+  "recording": [
+    {
+      "positions": [
+        {
+          "id": 1,
+          "x": 350,
+          "y": 850
+        }
+      ]
+    }
+  ]
 }
