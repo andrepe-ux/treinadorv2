@@ -1,0 +1,10 @@
+{
+  "plays": [
+    {
+      "id": "ataque_001",
+      "nome": "Saída Pressão 4x3",
+      "categoria": "Ataque",
+      "ficheiro": "./jogadas/ataque/saida_pressao.json"
+    }
+  ]
+}
