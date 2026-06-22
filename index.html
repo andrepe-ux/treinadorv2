@@ -143,7 +143,18 @@
                     <div id="savedPlaysList" class="space-y-2 max-h-60 overflow-y-auto pr-1">
                         <p class="text-gray-500 text-sm">Nenhuma jogada salva.</p>
                     </div>
+                
+
+                <!-- Biblioteca Pública -->
+                <div class="p-4 bg-gray-100 rounded-xl shadow-inner border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-3 border-b border-gray-300 pb-2 text-blue-600">📚 Biblioteca Pública</h2>
+                    <input id="librarySearch" type="text" placeholder="Pesquisar jogadas..."
+                        class="w-full p-2 mb-3 bg-white border border-gray-300 rounded-lg text-sm">
+                    <div id="publicLibraryList" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                        <p class="text-gray-500 text-sm">A carregar biblioteca...</p>
+                    </div>
                 </div>
+</div>
             </div>
 
             <!-- Campo de Futsal (Canvas) - CENTRO (100% por defeito, dinâmico) -->
@@ -198,7 +209,7 @@
         const PLAYER_RADIUS = ORIGINAL_PLAYER_RADIUS * SCALE_FACTOR; 
         const BALL_RADIUS = 15 * SCALE_FACTOR; 
         
-        const FRAME_RATE = 100; // Milissegundos por frame (10 FPS)
+        const FRAME_RATE = 33; // ~30 FPS // Milissegundos por frame (10 FPS)
         const TRAIL_LENGTH = 15; // Número de pontos para o rasto em tempo real
         
         const LOGO_URL = 'https://placehold.co/150x300/9CA3AF/FFFFFF?text=Novasemente GD'; 
@@ -252,7 +263,8 @@
         let initialPositions = []; 
 
         let state = {
-            plays: [], 
+            plays: [],
+            publicLibrary: [], 
             players: [], 
             ball: {}, 
             playerLabels: {},
@@ -1128,7 +1140,7 @@
             const name = playNameInput.value.trim() || `Jogada ${state.plays.length + 1}`;
             
             const newPlay = {
-                id: Date.now(),
+                id: (crypto.randomUUID ? crypto.randomUUID() : Date.now()),
                 name: name,
                 labels: state.playerLabels,
                 recording: state.recording,
@@ -1137,6 +1149,7 @@
             state.plays.push(newPlay);
             savePlaysToLocal(); 
             renderSavedPlaysList(); 
+            loadPublicLibrary(); 
             
             exportSinglePlayJson(newPlay);
             
@@ -1292,6 +1305,45 @@
                 list.appendChild(div);
             });
         }
+
+        
+        async function loadPublicLibrary() {
+            try {
+                const response = await fetch('./jogadas/index.json');
+                const data = await response.json();
+                state.publicLibrary = data.plays || [];
+                renderPublicLibrary(state.publicLibrary);
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        function renderPublicLibrary(items) {
+            const list = document.getElementById('publicLibraryList');
+            if(!list) return;
+            list.innerHTML='';
+
+            if(!items.length){
+                list.innerHTML='<p class="text-gray-500 text-sm">Sem jogadas públicas.</p>';
+                return;
+            }
+
+            items.forEach(play=>{
+                const row=document.createElement('div');
+                row.className='flex justify-between items-center p-2 bg-white rounded border';
+                row.innerHTML=`<span class="text-sm">${play.nome}</span>
+                <button class="px-2 py-1 bg-blue-500 text-white rounded text-xs">Abrir</button>`;
+                row.querySelector('button').onclick=()=>loadPublicPlay(play);
+                list.appendChild(row);
+            });
+        }
+
+        async function loadPublicPlay(play){
+            const r=await fetch(play.ficheiro);
+            const data=await r.json();
+            loadPlay(data);
+        }
+
 
         // --- Inicialização e Listeners ---
         function init() {
