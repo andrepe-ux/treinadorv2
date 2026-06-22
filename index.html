@@ -1307,16 +1307,23 @@
         }
 
         
-        async function loadPublicLibrary() {
-            try {
-                const response = await fetch('./jogadas/index.json');
-                const data = await response.json();
-                state.publicLibrary = data.plays || [];
-                renderPublicLibrary(state.publicLibrary);
-            } catch(e) {
-                console.error(e);
-            }
-        }
+       async function loadPublicLibrary() {
+    console.log("A carregar biblioteca pública...");
+    
+    try {
+        const response = await fetch('./jogadas/index.json');
+        console.log("Resposta:", response.status);
+
+        const data = await response.json();
+        console.log("Dados:", data);
+
+        state.publicLibrary = data.plays || [];
+        renderPublicLibrary(state.publicLibrary);
+
+    } catch(error) {
+        console.error("Erro biblioteca:", error);
+    }
+}
 
         function renderPublicLibrary(items) {
             const list = document.getElementById('publicLibraryList');
