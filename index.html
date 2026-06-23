@@ -108,6 +108,15 @@
                     
                     <input type="text" id="playNameInput" placeholder="Nome da Jogada" class="w-full p-2 mb-3 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 focus:border-teal-500 focus:ring-teal-500 shadow-sm" value="Nova Jogada">
 
+                    <label for="playCategoryInput" class="block text-xs font-medium text-gray-600 mb-1">Categoria (define a subpasta no GitHub):</label>
+                    <select id="playCategoryInput" class="w-full p-2 mb-3 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 focus:border-teal-500 focus:ring-teal-500 shadow-sm">
+                        <option value="ataque">Ataque</option>
+                        <option value="defesa">Defesa</option>
+                        <option value="transicao">Transição</option>
+                        <option value="bola_parada">Bola Parada</option>
+                        <option value="geral">Geral</option>
+                    </select>
+
                     <button id="saveBtn" class="w-full py-2 px-4 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold transition duration-150 disabled:opacity-50 shadow-md">
                         Guardar Jogada (Exporta JSON)
                     </button>
@@ -115,6 +124,10 @@
                     
                     <div class="mt-4 p-2 bg-yellow-100 text-yellow-800 rounded-lg text-xs">
                         **Dica de Vídeo:** Use o gravador de tela do seu sistema (Windows: Win+G / Mac: Cmd+Shift+5) para capturar o vídeo enquanto a jogada é reproduzida.
+                    </div>
+                    <div class="mt-2 p-2 bg-blue-50 text-blue-800 rounded-lg text-xs">
+                        📤 <strong>Para publicar na Biblioteca Pública:</strong> depois de guardar, suba o ficheiro JSON descarregado para a pasta
+                        <code class="bg-blue-100 px-1 rounded">jogadas/&lt;categoria&gt;/</code> no seu repositório GitHub. O app deteta novos ficheiros automaticamente.
                     </div>
                 </div>
 
@@ -219,13 +232,17 @@
 
         // --- Biblioteca Pública (GitHub) ---
         // A biblioteca de jogadas públicas vive no repositório GitHub abaixo.
-        // Os ficheiros são lidos via raw.githubusercontent.com (conteúdo bruto,
-        // sem necessidade de autenticação e sem limite de CORS).
+        // Em vez de depender de um index.json mantido à mão, usamos a API de
+        // conteúdo do GitHub para LISTAR automaticamente os ficheiros dentro
+        // de cada subpasta de categoria. Isto significa que qualquer .json
+        // que for colocado nessas subpastas aparece sozinho na biblioteca.
         const GITHUB_USER = 'andrepe-ux';
         const GITHUB_REPO = 'treinadorv2';
         const GITHUB_BRANCH = 'main';
+        const GITHUB_API_BASE = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents`;
         const GITHUB_RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}`;
-        const PUBLIC_LIBRARY_INDEX_URL = `${GITHUB_RAW_BASE}/jogadas/index.json`;
+        // Subpastas de categoria dentro de jogadas/ que o app deve listar.
+        const LIBRARY_CATEGORIES = ['ataque', 'defesa', 'transicao', 'bola_parada', 'geral'];
 
         // Referências ao DOM
         const canvas = document.getElementById('futsalCanvas');
@@ -236,6 +253,7 @@
         const exportAllBtn = document.getElementById('exportAllBtn'); 
         const importFile = document.getElementById('importFile'); 
         const playNameInput = document.getElementById('playNameInput');
+        const playCategoryInput = document.getElementById('playCategoryInput');
         const toggleOpponentBtn = document.getElementById('toggleOpponentBtn'); 
         const resetBtn = document.getElementById('resetBtn'); 
         const undoBtn = document.getElementById('undoBtn'); 
@@ -1148,10 +1166,12 @@
             }
             
             const name = playNameInput.value.trim() || `Jogada ${state.plays.length + 1}`;
+            const categoria = playCategoryInput ? playCategoryInput.value : 'geral';
             
             const newPlay = {
                 id: (crypto.randomUUID ? crypto.randomUUID() : Date.now()),
                 name: name,
+                categoria: categoria,
                 labels: state.playerLabels,
                 recording: state.recording,
             };
@@ -1162,7 +1182,7 @@
             
             exportSinglePlayJson(newPlay);
             
-            setStatus(`Jogada "${name}" guardada e ficheiro JSON exportado com sucesso!`);
+            setStatus(`Jogada "${name}" guardada! Para publicar, suba o ficheiro JSON descarregado para jogadas/${categoria}/ no GitHub.`);
         }
         
         function loadPlay(play) {
@@ -1317,28 +1337,72 @@
 
         // --- Biblioteca Pública (GitHub) ---
 
-        // Junta a base do GitHub (raw) com um caminho relativo do índice,
-        // tratando tanto caminhos "jogadas/ataque/x.json" como "./x.json" ou "/x.json".
-        function resolveLibraryFileUrl(relativePath) {
-            if (!relativePath) return null;
-            // URL absoluta (http/https) é usada como está.
-            if (/^https?:\/\//i.test(relativePath)) return relativePath;
-            const cleanPath = relativePath.replace(/^\.?\//, '');
-            return `${GITHUB_RAW_BASE}/${cleanPath}`;
+        // Lista os ficheiros .json dentro de uma subpasta de categoria,
+        // usando a API de conteúdo do GitHub (funciona em repositórios
+        // públicos sem autenticação, limite de 60 pedidos/hora por IP).
+        async function listCategoryFiles(category) {
+            const url = `${GITHUB_API_BASE}/jogadas/${category}?ref=${GITHUB_BRANCH}`;
+            const response = await fetch(url, {
+                headers: { 'Accept': 'application/vnd.github+json' },
+                cache: 'no-cache'
+            });
+
+            if (response.status === 404) {
+                // A subpasta ainda não existe no repositório — não é um erro fatal.
+                return [];
+            }
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const items = await response.json();
+            return items
+                .filter(item => item.type === 'file' && item.name.toLowerCase().endsWith('.json'))
+                .map(item => ({
+                    name: item.name,
+                    categoria: category,
+                    download_url: item.download_url,
+                    path: item.path
+                }));
         }
 
         async function loadPublicLibrary() {
             const list = document.getElementById('publicLibraryList');
-            try {
-                list.innerHTML = '<p class="text-gray-500 text-sm">A carregar biblioteca...</p>';
+            list.innerHTML = '<p class="text-gray-500 text-sm">A carregar biblioteca...</p>';
 
-                const response = await fetch(PUBLIC_LIBRARY_INDEX_URL, { cache: 'no-cache' });
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                const data = await response.json();
-                state.publicLibrary = data.plays || [];
+            try {
+                const results = await Promise.allSettled(
+                    LIBRARY_CATEGORIES.map(category => listCategoryFiles(category))
+                );
+
+                let allFiles = [];
+                let hadError = false;
+
+                results.forEach((result, idx) => {
+                    if (result.status === 'fulfilled') {
+                        allFiles = allFiles.concat(result.value);
+                    } else {
+                        hadError = true;
+                        console.error(`Erro ao listar categoria "${LIBRARY_CATEGORIES[idx]}":`, result.reason);
+                    }
+                });
+
+                // Transforma cada ficheiro listado num "play" para a UI,
+                // usando o nome do ficheiro (sem extensão) como nome provisório.
+                // O nome real e definitivo só é conhecido ao abrir o ficheiro,
+                // por isso é atualizado depois de cada "Abrir".
+                state.publicLibrary = allFiles.map(f => ({
+                    name: humanizeFileName(f.name),
+                    categoria: f.categoria,
+                    download_url: f.download_url,
+                    path: f.path
+                }));
+
                 renderPublicLibrary(state.publicLibrary);
+
+                if (hadError && allFiles.length === 0) {
+                    setStatus('Não foi possível ligar à biblioteca pública do GitHub (limite de pedidos ou sem ligação).', true);
+                }
             } catch (e) {
                 console.error('Erro ao carregar a biblioteca pública do GitHub:', e);
                 list.innerHTML = `<p class="text-red-500 text-sm">
@@ -1346,6 +1410,19 @@
                     <span class="text-xs text-gray-500">Verifique a ligação à internet ou tente novamente mais tarde.</span>
                 </p>`;
             }
+        }
+
+        // Converte um nome de ficheiro em algo legível para mostrar na lista
+        // antes de o ficheiro ser aberto (ex: "NJ_JOGADA_saida_lados_abc.json"
+        // -> "Saida Lados").
+        function humanizeFileName(filename) {
+            return filename
+                .replace(/\.json$/i, '')
+                .replace(/^NJ_JOGADA_/i, '')
+                .replace(/_[a-f0-9-]{8,}$/i, '') // remove sufixo de ID/UUID
+                .replace(/[_-]+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, c => c.toUpperCase()) || filename;
         }
 
         function renderPublicLibrary(items) {
@@ -1403,8 +1480,7 @@
         }
 
         async function loadPublicPlay(play) {
-            const fileField = play.ficheiro || play.file;
-            const url = resolveLibraryFileUrl(fileField);
+            const url = play.download_url;
 
             if (!url) {
                 setStatus('Esta jogada da biblioteca pública não tem ficheiro associado.', true);
@@ -1421,6 +1497,13 @@
 
                 if (!data.recording || !data.labels) {
                     throw new Error('Ficheiro de jogada inválido (faltam "recording" ou "labels").');
+                }
+
+                // Agora que temos o conteúdo real, atualiza o nome exibido
+                // na lista (caso o ficheiro tenha um campo "name" próprio).
+                if (data.name) {
+                    play.name = data.name;
+                    renderPublicLibrary(state.publicLibrary);
                 }
 
                 loadPlay(data);
