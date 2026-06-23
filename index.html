@@ -1,4 +1,4 @@
-
+<!DOCTYPE html>
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
@@ -42,7 +42,7 @@
         }
     </style>
     <!-- Google Font: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="bg-gray-100 text-gray-900 min-h-screen flex flex-col items-center justify-center p-4" style="font-family: 'Inter', sans-serif;">
 
@@ -143,7 +143,7 @@
                     <div id="savedPlaysList" class="space-y-2 max-h-60 overflow-y-auto pr-1">
                         <p class="text-gray-500 text-sm">Nenhuma jogada salva.</p>
                     </div>
-                
+                </div>
 
                 <!-- Biblioteca Pública -->
                 <div class="p-4 bg-gray-100 rounded-xl shadow-inner border border-gray-200">
@@ -154,7 +154,6 @@
                         <p class="text-gray-500 text-sm">A carregar biblioteca...</p>
                     </div>
                 </div>
-</div>
             </div>
 
             <!-- Campo de Futsal (Canvas) - CENTRO (100% por defeito, dinâmico) -->
@@ -209,14 +208,24 @@
         const PLAYER_RADIUS = ORIGINAL_PLAYER_RADIUS * SCALE_FACTOR; 
         const BALL_RADIUS = 15 * SCALE_FACTOR; 
         
-        const FRAME_RATE = 33; // ~30 FPS // Milissegundos por frame (10 FPS)
+        const FRAME_RATE = 33; // ~30 FPS // Milissegundos por frame
         const TRAIL_LENGTH = 15; // Número de pontos para o rasto em tempo real
         
-        const LOGO_URL = 'https://placehold.co/150x300/9CA3AF/FFFFFF?text=Novasemente GD'; 
+        const LOGO_URL = 'https://placehold.co/150x300/9CA3AF/FFFFFF?text=Novasemente+GD'; 
         
         const TEAM_COLOR = '#f87171'; // Vermelho Claro 
         const OPPONENT_COLOR = '#10b981'; // Verde
         const PATH_COLOR = 'rgba(255, 255, 255, 0.6)'; // Branco semi-transparente para as linhas
+
+        // --- Biblioteca Pública (GitHub) ---
+        // A biblioteca de jogadas públicas vive no repositório GitHub abaixo.
+        // Os ficheiros são lidos via raw.githubusercontent.com (conteúdo bruto,
+        // sem necessidade de autenticação e sem limite de CORS).
+        const GITHUB_USER = 'andrepe-ux';
+        const GITHUB_REPO = 'treinadorv2';
+        const GITHUB_BRANCH = 'main';
+        const GITHUB_RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}`;
+        const PUBLIC_LIBRARY_INDEX_URL = `${GITHUB_RAW_BASE}/jogadas/index.json`;
 
         // Referências ao DOM
         const canvas = document.getElementById('futsalCanvas');
@@ -231,6 +240,7 @@
         const resetBtn = document.getElementById('resetBtn'); 
         const undoBtn = document.getElementById('undoBtn'); 
         const togglePathArrowsBtn = document.getElementById('togglePathArrowsBtn'); 
+        const librarySearchInput = document.getElementById('librarySearch');
         
         // Elementos de menu (Esquerdo e Direito)
         const menuPanelLeft = document.getElementById('menuPanelLeft');
@@ -1149,7 +1159,6 @@
             state.plays.push(newPlay);
             savePlaysToLocal(); 
             renderSavedPlaysList(); 
-            loadPublicLibrary(); 
             
             exportSinglePlayJson(newPlay);
             
@@ -1306,42 +1315,119 @@
             });
         }
 
-        
+        // --- Biblioteca Pública (GitHub) ---
+
+        // Junta a base do GitHub (raw) com um caminho relativo do índice,
+        // tratando tanto caminhos "jogadas/ataque/x.json" como "./x.json" ou "/x.json".
+        function resolveLibraryFileUrl(relativePath) {
+            if (!relativePath) return null;
+            // URL absoluta (http/https) é usada como está.
+            if (/^https?:\/\//i.test(relativePath)) return relativePath;
+            const cleanPath = relativePath.replace(/^\.?\//, '');
+            return `${GITHUB_RAW_BASE}/${cleanPath}`;
+        }
+
         async function loadPublicLibrary() {
+            const list = document.getElementById('publicLibraryList');
             try {
-                const response = await fetch('./jogadas/index.json');
+                list.innerHTML = '<p class="text-gray-500 text-sm">A carregar biblioteca...</p>';
+
+                const response = await fetch(PUBLIC_LIBRARY_INDEX_URL, { cache: 'no-cache' });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 const data = await response.json();
                 state.publicLibrary = data.plays || [];
                 renderPublicLibrary(state.publicLibrary);
-            } catch(e) {
-                console.error(e);
+            } catch (e) {
+                console.error('Erro ao carregar a biblioteca pública do GitHub:', e);
+                list.innerHTML = `<p class="text-red-500 text-sm">
+                    Não foi possível carregar a biblioteca pública.<br>
+                    <span class="text-xs text-gray-500">Verifique a ligação à internet ou tente novamente mais tarde.</span>
+                </p>`;
             }
         }
 
         function renderPublicLibrary(items) {
             const list = document.getElementById('publicLibraryList');
-            if(!list) return;
-            list.innerHTML='';
+            if (!list) return;
+            list.innerHTML = '';
 
-            if(!items.length){
-                list.innerHTML='<p class="text-gray-500 text-sm">Sem jogadas públicas.</p>';
+            if (!items.length) {
+                list.innerHTML = '<p class="text-gray-500 text-sm">Sem jogadas públicas.</p>';
                 return;
             }
 
-            items.forEach(play=>{
-                const row=document.createElement('div');
-                row.className='flex justify-between items-center p-2 bg-white rounded border';
-                row.innerHTML=`<span class="text-sm">${play.nome}</span>
-                <button class="px-2 py-1 bg-blue-500 text-white rounded text-xs">Abrir</button>`;
-                row.querySelector('button').onclick=()=>loadPublicPlay(play);
+            items.forEach(play => {
+                const row = document.createElement('div');
+                row.className = 'flex justify-between items-center p-2 bg-white rounded border border-gray-200 shadow-sm';
+
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'flex-grow truncate mr-2';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'text-sm font-medium text-gray-800 block truncate';
+                nameSpan.textContent = play.name || play.nome || 'Sem nome';
+                infoDiv.appendChild(nameSpan);
+
+                if (play.categoria) {
+                    const catSpan = document.createElement('span');
+                    catSpan.className = 'text-xs text-gray-500';
+                    catSpan.textContent = play.categoria;
+                    infoDiv.appendChild(catSpan);
+                }
+
+                const openBtn = document.createElement('button');
+                openBtn.textContent = 'Abrir';
+                openBtn.className = 'px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs flex-shrink-0 transition';
+                openBtn.onclick = () => loadPublicPlay(play);
+
+                row.appendChild(infoDiv);
+                row.appendChild(openBtn);
                 list.appendChild(row);
             });
         }
 
-        async function loadPublicPlay(play){
-            const r=await fetch(play.ficheiro);
-            const data=await r.json();
-            loadPlay(data);
+        function filterPublicLibrary(query) {
+            const term = query.trim().toLowerCase();
+            if (!term) {
+                renderPublicLibrary(state.publicLibrary);
+                return;
+            }
+            const filtered = state.publicLibrary.filter(play => {
+                const name = (play.name || play.nome || '').toLowerCase();
+                const categoria = (play.categoria || '').toLowerCase();
+                return name.includes(term) || categoria.includes(term);
+            });
+            renderPublicLibrary(filtered);
+        }
+
+        async function loadPublicPlay(play) {
+            const fileField = play.ficheiro || play.file;
+            const url = resolveLibraryFileUrl(fileField);
+
+            if (!url) {
+                setStatus('Esta jogada da biblioteca pública não tem ficheiro associado.', true);
+                return;
+            }
+
+            try {
+                setStatus('A carregar jogada da biblioteca pública...');
+                const r = await fetch(url, { cache: 'no-cache' });
+                if (!r.ok) {
+                    throw new Error(`HTTP ${r.status}`);
+                }
+                const data = await r.json();
+
+                if (!data.recording || !data.labels) {
+                    throw new Error('Ficheiro de jogada inválido (faltam "recording" ou "labels").');
+                }
+
+                loadPlay(data);
+            } catch (e) {
+                console.error('Erro ao carregar jogada pública:', e);
+                setStatus(`ERRO ao carregar jogada da biblioteca pública: ${e.message}`, true);
+            }
         }
 
 
@@ -1350,6 +1436,7 @@
             initializeState(); 
             loadPlaysFromLocal(); 
             renderSavedPlaysList(); 
+            loadPublicLibrary();
             
             // Força o estado inicial de layout (ambos fechados)
             state.isMenuLeftOpen = false; 
@@ -1388,6 +1475,11 @@
             
             // Listener de Toggle do Oponente
             toggleOpponentBtn.addEventListener('click', toggleOpponentVisibility);
+
+            // Listener de pesquisa na Biblioteca Pública
+            if (librarySearchInput) {
+                librarySearchInput.addEventListener('input', (e) => filterPublicLibrary(e.target.value));
+            }
 
             // Listeners de Drag & Drop (Mouse e Touch)
             canvas.addEventListener('mousedown', handleStart);
